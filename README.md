@@ -9,6 +9,7 @@ A Flask-based REST API server that powers the AI Productivity Suite for Students
 - **Habit Tracking** - Daily habit monitoring with progress analytics
 - **AI Note Summarization** - Intelligent text summarization using Google Gemini
 - **PDF Q&A System** - RAG-based document question answering with LangChain + FAISS
+- **Document Summarizer** - AI-powered PDF summarization for study purposes with multiple summary types
 - **Pomodoro Timer** - Session tracking with statistics and settings
 - **CORS Support** - Configured for frontend integration
 
@@ -117,6 +118,11 @@ http://localhost:5000/api
 - `GET /pdf-qa/documents` - Get uploaded documents
 - `POST /pdf-qa/query` - Ask questions about uploaded PDFs
 - `DELETE /pdf-qa/documents/{id}` - Delete document
+
+### Document Summarizer Endpoints
+- `POST /pdf-qa/summarize/{document_id}` - Generate AI summary of uploaded PDF
+- `GET /pdf-qa/summaries` - Get user's document summaries
+- `DELETE /pdf-qa/summaries/{summary_id}` - Delete specific summary
 
 ### Pomodoro Endpoints
 - `GET /pomodoro/settings` - Get timer settings

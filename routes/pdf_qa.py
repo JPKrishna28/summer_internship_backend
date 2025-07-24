@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from routes.auth import token_required
 from datetime import datetime
 import google.generativeai as genai
@@ -11,6 +11,8 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
 import tempfile
 import json
+import base64
+import uuid
 from bson import ObjectId
 
 pdf_qa_bp = Blueprint('pdf_qa', __name__)
@@ -358,3 +360,162 @@ Questions:"""
         
     except Exception as e:
         return jsonify({'error': f'Question generation failed: {str(e)}'}), 500
+
+@pdf_qa_bp.route('/summarize/<document_id>', methods=['POST'])
+@token_required
+def summarize_document(current_user_id, document_id):
+    """Generate a comprehensive summary of a PDF document for study purposes"""
+    try:
+        # Validate document ID
+        if not ObjectId.is_valid(document_id):
+            return jsonify({'error': 'Invalid document ID'}), 400
+        
+        # Find the document
+        document = current_app.mongo.db.pdf_documents.find_one({
+            '_id': ObjectId(document_id),
+            'user_id': current_user_id
+        })
+        
+        if not document:
+            return jsonify({'error': 'Document not found'}), 404
+        
+        # Get summarization options from request
+        data = request.get_json() or {}
+        summary_type = data.get('type', 'comprehensive')  # comprehensive, brief, bullet_points, key_concepts
+        focus_area = data.get('focus_area', '')  # Optional: specific topic to focus on
+        
+        # Get the document text
+        text = document['original_text']
+        
+        # Create appropriate prompt based on summary type
+        if summary_type == 'brief':
+            prompt = f"""Please provide a brief summary of the following document in 3-4 sentences. Focus on the main topic and key takeaways:
+
+{text}
+
+Brief Summary:"""
+        
+        elif summary_type == 'bullet_points':
+            prompt = f"""Please summarize the following document in bullet points. Organize the information in a clear, hierarchical structure suitable for studying:
+
+{text}
+
+Summary in bullet points:"""
+        
+        elif summary_type == 'key_concepts':
+            prompt = f"""Please extract and explain the key concepts, definitions, and important terms from the following document. Format it as a study guide:
+
+{text}
+
+Key Concepts and Definitions:"""
+        
+        elif summary_type == 'exam_prep':
+            prompt = f"""Please create an exam preparation summary of the following document. Include:
+1. Main topics and subtopics
+2. Key facts and figures
+3. Important concepts to remember
+4. Potential exam questions
+
+{text}
+
+Exam Preparation Summary:"""
+        
+        else:  # comprehensive
+            prompt = f"""Please provide a comprehensive summary of the following document. Include:
+1. Main topic and purpose
+2. Key points and arguments
+3. Important details and examples
+4. Conclusions and implications
+
+Make it suitable for a student studying for exams.
+
+{text}
+
+Comprehensive Summary:"""
+        
+        # Add focus area if specified
+        if focus_area:
+            prompt += f"\n\nPlease pay special attention to information related to: {focus_area}"
+        
+        # Generate summary using Gemini
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(prompt)
+        summary_text = response.text
+        
+        # Save summary to database
+        summary_data = {
+            'user_id': current_user_id,
+            'document_id': ObjectId(document_id),
+            'document_name': document['filename'],
+            'summary_type': summary_type,
+            'focus_area': focus_area,
+            'summary_text': summary_text,
+            'created_at': datetime.utcnow()
+        }
+        
+        result = current_app.mongo.db.document_summaries.insert_one(summary_data)
+        
+        return jsonify({
+            'message': 'Document summary generated successfully',
+            'summary': summary_text,
+            'summary_type': summary_type,
+            'summary_id': str(result.inserted_id),
+            'document_name': document['filename']
+        }), 201
+        
+    except Exception as e:
+        return jsonify({'error': f'Summary generation failed: {str(e)}'}), 500
+
+@pdf_qa_bp.route('/summaries', methods=['GET'])
+@token_required
+def get_user_summaries(current_user_id):
+    """Get all summaries created by the user"""
+    try:
+        # Get query parameters
+        document_id = request.args.get('document_id')
+        summary_type = request.args.get('type')
+        
+        # Build query
+        query = {'user_id': current_user_id}
+        if document_id and ObjectId.is_valid(document_id):
+            query['document_id'] = ObjectId(document_id)
+        if summary_type:
+            query['summary_type'] = summary_type
+        
+        # Get summaries
+        summaries = list(current_app.mongo.db.document_summaries.find(query).sort('created_at', -1))
+        
+        # Convert ObjectIds to strings
+        for summary in summaries:
+            summary['_id'] = str(summary['_id'])
+            summary['document_id'] = str(summary['document_id'])
+            summary['created_at'] = summary['created_at'].isoformat()
+        
+        return jsonify({
+            'summaries': summaries,
+            'count': len(summaries)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@pdf_qa_bp.route('/summaries/<summary_id>', methods=['DELETE'])
+@token_required
+def delete_summary(current_user_id, summary_id):
+    """Delete a specific summary"""
+    try:
+        if not ObjectId.is_valid(summary_id):
+            return jsonify({'error': 'Invalid summary ID'}), 400
+        
+        result = current_app.mongo.db.document_summaries.delete_one({
+            '_id': ObjectId(summary_id),
+            'user_id': current_user_id
+        })
+        
+        if result.deleted_count == 0:
+            return jsonify({'error': 'Summary not found'}), 404
+        
+        return jsonify({'message': 'Summary deleted successfully'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

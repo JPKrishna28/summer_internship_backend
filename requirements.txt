@@ -4,6 +4,7 @@ Flask-PyMongo==2.3.0
 python-dotenv==1.0.0
 pymongo==4.5.0
 google-generativeai==0.3.2
+pyttsx3==2.90
 langchain==0.1.0
 langchain-google-genai==0.0.8
 faiss-cpu==1.7.4

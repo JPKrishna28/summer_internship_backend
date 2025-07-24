@@ -12,6 +12,7 @@ from routes.habits import habits_bp
 from routes.notes import notes_bp
 from routes.pdf_qa import pdf_qa_bp
 from routes.pomodoro import pomodoro_bp
+from routes.tts import tts_bp
 
 # Load environment variables
 load_dotenv()
@@ -45,6 +46,7 @@ def create_app():
     app.register_blueprint(notes_bp, url_prefix='/api/notes')
     app.register_blueprint(pdf_qa_bp, url_prefix='/api/pdf-qa')
     app.register_blueprint(pomodoro_bp, url_prefix='/api/pomodoro')
+    app.register_blueprint(tts_bp, url_prefix='/api/tts')
     
     # Health check endpoint
     @app.route('/api/health')
