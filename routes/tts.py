@@ -143,13 +143,13 @@ def generate_podcast(current_user_id, document_id):
             script_text = custom_script
         else:  # summary (default)
             # Generate a simple summary using Gemini
-            text = document['original_text'][:2000]  # Limit input text
+            text = document['original_text'][:3000]  # Limit input text
             
             prompt = f"""Create a brief podcast script (max 500 words) from this document:
 
 {text}
 
-Make it conversational and engaging for audio listening."""
+Make it conversational and engaging for audio listening and just return the text for the audio."""
             
             try:
                 model = genai.GenerativeModel('gemini-2.0-flash')
